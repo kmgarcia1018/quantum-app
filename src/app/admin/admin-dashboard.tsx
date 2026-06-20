@@ -12,6 +12,8 @@ type Props = {
   email: string
 }
 
+type Accion = 'descargar' | 'eliminar'
+
 function formatFecha(fecha: string) {
   return new Intl.DateTimeFormat('es-CO', {
     dateStyle: 'medium',
@@ -21,7 +23,8 @@ function formatFecha(fecha: string) {
 
 export default function AdminDashboard({ documentos, email }: Props) {
   const router = useRouter()
-  const [descargando, setDescargando] = useState<string | null>(null)
+  const [lista, setLista] = useState(documentos)
+  const [accionEnCurso, setAccionEnCurso] = useState<{ id: string; tipo: Accion } | null>(null)
   const [error, setError] = useState('')
 
   const handleLogout = async () => {
@@ -33,14 +36,14 @@ export default function AdminDashboard({ documentos, email }: Props) {
 
   const handleDownload = async (documento: Documento) => {
     setError('')
-    setDescargando(documento.id)
+    setAccionEnCurso({ id: documento.id, tipo: 'descargar' })
 
     const supabase = createClient()
     const { data, error: downloadError } = await supabase.storage
       .from(STORAGE_BUCKET)
       .download(documento.ruta_archivo)
 
-    setDescargando(null)
+    setAccionEnCurso(null)
 
     if (downloadError || !data) {
       setError(`No se pudo descargar ${documento.nombre_archivo}.`)
@@ -53,6 +56,43 @@ export default function AdminDashboard({ documentos, email }: Props) {
     link.download = documento.nombre_archivo
     link.click()
     URL.revokeObjectURL(url)
+  }
+
+  const handleDelete = async (documento: Documento) => {
+    const confirmar = window.confirm(
+      `¿Eliminar "${documento.nombre_archivo}"?\n\nEsta acción no se puede deshacer.`
+    )
+
+    if (!confirmar) return
+
+    setError('')
+    setAccionEnCurso({ id: documento.id, tipo: 'eliminar' })
+
+    const supabase = createClient()
+
+    const { error: storageError } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .remove([documento.ruta_archivo])
+
+    if (storageError) {
+      setAccionEnCurso(null)
+      setError(`No se pudo eliminar ${documento.nombre_archivo}: ${storageError.message}`)
+      return
+    }
+
+    const { error: deleteError } = await supabase
+      .from('documentos')
+      .delete()
+      .eq('id', documento.id)
+
+    setAccionEnCurso(null)
+
+    if (deleteError) {
+      setError(`El archivo se eliminó, pero no el registro: ${deleteError.message}`)
+      return
+    }
+
+    setLista((actual) => actual.filter((item) => item.id !== documento.id))
   }
 
   return (
@@ -98,30 +138,45 @@ export default function AdminDashboard({ documentos, email }: Props) {
             </tr>
           </thead>
           <tbody>
-            {documentos.length === 0 ? (
+            {lista.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-neutral-500">
                   Aún no hay documentos subidos.
                 </td>
               </tr>
             ) : (
-              documentos.map((documento) => (
-                <tr key={documento.id} className="border-t border-neutral-200 dark:border-neutral-800">
-                  <td className="px-4 py-3 whitespace-nowrap">{formatFecha(documento.fecha_subida)}</td>
-                  <td className="px-4 py-3">{documento.nombre_persona}</td>
-                  <td className="px-4 py-3">{documento.empresa}</td>
-                  <td className="px-4 py-3">{documento.nombre_archivo}</td>
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={() => handleDownload(documento)}
-                      disabled={descargando === documento.id}
-                      className="text-sm font-medium underline-offset-4 hover:underline disabled:opacity-50"
-                    >
-                      {descargando === documento.id ? 'Descargando...' : 'Descargar'}
-                    </button>
-                  </td>
-                </tr>
-              ))
+              lista.map((documento) => {
+                const ocupado = accionEnCurso?.id === documento.id
+                const descargando = ocupado && accionEnCurso?.tipo === 'descargar'
+                const eliminando = ocupado && accionEnCurso?.tipo === 'eliminar'
+
+                return (
+                  <tr key={documento.id} className="border-t border-neutral-200 dark:border-neutral-800">
+                    <td className="px-4 py-3 whitespace-nowrap">{formatFecha(documento.fecha_subida)}</td>
+                    <td className="px-4 py-3">{documento.nombre_persona}</td>
+                    <td className="px-4 py-3">{documento.empresa}</td>
+                    <td className="px-4 py-3">{documento.nombre_archivo}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-3">
+                        <button
+                          onClick={() => handleDownload(documento)}
+                          disabled={ocupado}
+                          className="text-sm font-medium underline-offset-4 hover:underline disabled:opacity-50"
+                        >
+                          {descargando ? 'Descargando...' : 'Descargar'}
+                        </button>
+                        <button
+                          onClick={() => handleDelete(documento)}
+                          disabled={ocupado}
+                          className="text-sm font-medium text-red-600 underline-offset-4 hover:underline disabled:opacity-50 dark:text-red-400"
+                        >
+                          {eliminando ? 'Eliminando...' : 'Eliminar'}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })
             )}
           </tbody>
         </table>
