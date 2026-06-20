@@ -37,7 +37,7 @@ export default function Home() {
     if (invalidos.length > 0) {
       setEstado('error')
       setMensaje(
-        `Archivos no permitidos: ${invalidos.map((f) => f.name).join(', ')}. Solo Excel, Word e imágenes.`
+        `Archivos no permitidos: ${invalidos.map((f) => f.name).join(', ')}. Solo Excel, Word, PDF e imágenes.`
       )
       return
     }
@@ -137,13 +137,13 @@ export default function Home() {
           <input
             type="file"
             multiple
-            accept=".xlsx,.xls,.doc,.docx,.jpg,.jpeg,.png,.gif,.webp,image/*"
+            accept=".xlsx,.xls,.doc,.docx,.pdf,.jpg,.jpeg,.png,.gif,.webp,application/pdf,image/*"
             onChange={(e) => setArchivos(e.target.files)}
             className="rounded-lg border border-dashed border-neutral-300 px-3 py-4 text-sm dark:border-neutral-700"
             disabled={estado === 'enviando'}
           />
           <span className="text-xs text-neutral-500">
-            Formatos permitidos: Excel, Word e imágenes (JPG, PNG, GIF, WEBP).
+            Formatos permitidos: Excel, Word, PDF e imágenes (JPG, PNG, GIF, WEBP).
           </span>
         </label>
 
